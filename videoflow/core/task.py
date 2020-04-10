@@ -129,6 +129,8 @@ class ProducerTask(NodeTask):
             if self._messenger.check_for_termination():
                 break
         self._messenger.publish_termination_message(STOP_SIGNAL)
+        logger.debug(f'{self._producer} published termination message')
+        logger.debug(f'{self._producer} finished running.')
 
 class ProcessorTask(NodeTask):
     '''
@@ -159,10 +161,12 @@ class ProcessorTask(NodeTask):
                     inputs = [a['message'] for a in inputs_d_l]
                     stop_signal_received = any([isinstance(a, str) and a == STOP_SIGNAL for a in inputs])
                     if stop_signal_received:
+                        logger.debug(f'{self._processor} received termination message.')
                         self._messenger.publish_termination_message(
                             STOP_SIGNAL,
                             None
                         )
+                        logger.debug(f'{self._processor} published termination message.')
                         break
 
                     #3. Pass inputs needed to processor
@@ -182,6 +186,7 @@ class ProcessorTask(NodeTask):
                         )
             except KeyboardInterrupt:
                 continue
+        logger.debug(f'{self._processor} finished running.')
         
 class ConsumerTask(NodeTask):
     '''
@@ -212,8 +217,10 @@ class ConsumerTask(NodeTask):
                         # If "children" need to stop, they will receive it from
                         # someone else, so the message that I am passing through
                         # might be the one carrying it.
+                        logger.debug(f'{self._consumer} received termination message.')
                         if not self.is_last:
                             self._messenger.publish_termination_message(None, None)
+                            logger.debug(f'{self._consumer} published termination message.')
                         break
 
                     start_2_t = time.time()
@@ -236,6 +243,8 @@ class ConsumerTask(NodeTask):
                     
             except KeyboardInterrupt:
                 continue
+        
+        logger.debug(f'{self._consumer} finished running.')
 
 class MultiprocessingTask(Task):
     def __init__(self, processor : ProcessorNode):
@@ -270,7 +279,9 @@ class MultiprocessingReceiveTask(MultiprocessingTask):
                 with DelayedKeyboardInterrupt():
                     raw_inputs = self._parent_task_queue.get()
                     if self._has_stop_signal(raw_inputs):
+                        logger.debug(f'Receive subprocess for {self._processor} received termination message.')
                         self._rq.put(raw_inputs, block = True)
+                        logger.debug(f'Receive subprocess for {self._processor} published termination message.')
                         break
                     if self._flow_type == BATCH:
                         self._rq.put(raw_inputs, block = True)
@@ -281,6 +292,7 @@ class MultiprocessingReceiveTask(MultiprocessingTask):
                             pass
             except KeyboardInterrupt:
                 continue
+        logger.debug(f'Receive subprocess for {self._processor} finished running.')
 
 class MultiprocessingProcessorTask(MultiprocessingTask):
     def __init__(self, idx : int, processor: ProcessorNode, lock : Lock,
@@ -311,13 +323,16 @@ class MultiprocessingProcessorTask(MultiprocessingTask):
 
                     #2. If STOP_SIGNAL, place it in output, place it back in receiver, and break loop
                     if self._has_stop_signal(raw_inputs):
+                        logger.debug(f'Multiprocessing subprocess with id {self._idx} for processor {self._processor} received termination message.')
                         self._rq.put(raw_inputs, block = True)
+                        logger.debug(f'Multiprocessing subprocess with id {self._idx} for processor {self._processor} published termination message.')
                         raw_outputs = dict(raw_inputs)
                         raw_outputs[self._processor.id] = {
                             'message': STOP_SIGNAL,
                             'metadata': None
                         }
                         self._oq.put(raw_outputs)
+                        logger.debug(f'Multiprocessing subprocess with id {self._idx} for processor {self._processor} published output after termination message.')
                         break
                     
                     #3. Else: process it, and place result in oq
@@ -331,6 +346,7 @@ class MultiprocessingProcessorTask(MultiprocessingTask):
             except KeyboardInterrupt:
                 continue
         self._processor.close()
+        logger.debug(f'Multiprocessing subprocess with id {self._idx} for processor {self._processor} finished running.')
 
 class MultiprocessingOutputTask(MultiprocessingTask):
     def __init__(self, processor : ProcessorNode, task_queue : Queue, accountingQueue : Queue,
@@ -375,10 +391,12 @@ class MultiprocessingOutputTask(MultiprocessingTask):
 
                     if self._has_stop_signal(raw_outputs):
                         self._finish_count += 1
+                        logger.debug(f'Output subprocess for {self._processor} received stop signal and increment count to {self._finish_count}')
                     
                     if not self.is_last:
                         if self._finish_count == 1:
                             self._task_queue.put(raw_outputs, block = True)
+                            logger.debug(f'Output subprocess for {self._processor} published messages including termination message.')
                         elif self._finish_count == 0:
                             if self._flow_type == BATCH:
                                 self._task_queue.put(raw_outputs, block = True)
@@ -388,8 +406,10 @@ class MultiprocessingOutputTask(MultiprocessingTask):
                                 except:
                                     pass
                     if self._finish_count == len(self._output_queues):
+                        logger.debug(f'Output subprocess for {self._processor} received all termination messages.')
                         break
                     
             except KeyboardInterrupt:
                 continue
+        logger.debug(f'Output subprocess for {self._processor} finished running.')
         

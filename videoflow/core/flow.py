@@ -43,7 +43,7 @@ class Flow:
         - consumers: a list of consumer nodes of type ``videoflow.core.node.ConsumerNode``.
         - flow_type: one of 'realtime' or 'batch'
     '''
-    def __init__(self, producers, consumers, flow_type = REALTIME):
+    def __init__(self, producers, consumers, flow_type = REALTIME, debug_mode = False):
         self._graph_engine = GraphEngine(producers, consumers)
         if flow_type not in FLOW_TYPES:
             raise ValueError('flow_type must be one of {}'.format(','.join(FLOW_TYPES)))

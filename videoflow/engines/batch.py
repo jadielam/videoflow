@@ -55,14 +55,14 @@ class BatchprocessingQueueMessenger(Messenger):
                 }
             }
             self._task_queue.put(msg, block = True)
-            self._logger.debug(f'Published message {msg}')
+            #self._logger.debug(f'Published message {msg}')
         else:
             self._last_message_received[self._computation_node.id] = {
                 'message': message,
                 'metadata': metadata
             }
             self._task_queue.put(self._last_message_received, block = True)
-            self._logger.debug(f'Published message {self._last_message_received}')
+            #self._logger.debug(f'Published message {self._last_message_received}')
     
     def check_for_termination(self) -> bool:
         '''
@@ -85,7 +85,7 @@ class BatchprocessingQueueMessenger(Messenger):
     def receive_raw_message(self):
         input_message_dict = self._parent_task_queue.get()
         self._last_message_received = input_message_dict
-        self._logger.debug(f'Received message: {input_message_dict}')
+        #self._logger.debug(f'Received message: {input_message_dict}')
         
         #1. Check for STOP_SIGNAL before returning
         inputs = [input_message_dict[a] for a in self._parent_nodes_ids]
@@ -100,7 +100,7 @@ class BatchprocessingQueueMessenger(Messenger):
 
     def receive_message(self):
         input_message_dict = self._parent_task_queue.get()
-        self._logger.debug(f'Received message: {input_message_dict}')
+        #self._logger.debug(f'Received message: {input_message_dict}')
         self._last_message_received = input_message_dict
         inputs = [input_message_dict[a] for a in self._parent_nodes_ids]
         return inputs

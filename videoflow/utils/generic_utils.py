@@ -6,7 +6,6 @@ import time
 import sys
 import collections
 import signal
-import logging
 
 import numpy as np
 
