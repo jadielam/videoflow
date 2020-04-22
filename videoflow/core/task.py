@@ -3,7 +3,7 @@ from __future__ import division
 from __future__ import absolute_import
 
 import logging
-from multiprocessing import Queue, Lock
+from multiprocessing import Queue, Lock, Event
 import time
 
 from .node import Node, ProducerNode, ProcessorNode, ConsumerNode
@@ -283,10 +283,11 @@ class MultiprocessingReceiveTask(MultiprocessingTask):
                 continue
 
 class MultiprocessingProcessorTask(MultiprocessingTask):
-    def __init__(self, idx : int, processor: ProcessorNode, lock : Lock,
+    def __init__(self, idx : int, processor: ProcessorNode, lock : Lock, event : Event,
                 receiveQueue : Queue, accountingQueue : Queue, outputQueue : Queue):
         self._idx = idx
         self._lock = lock
+        self._kill_event = event
         self._rq = receiveQueue
         self._aq = accountingQueue
         self._oq = outputQueue
@@ -306,12 +307,15 @@ class MultiprocessingProcessorTask(MultiprocessingTask):
                 with DelayedKeyboardInterrupt():
                     #1. Read from rq and update aq
                     with self._lock:
+                        if self._kill_event.is_set():
+                            break
                         raw_inputs = self._rq.get(block = True)
                         self._aq.put(self._idx)
+                        if self._has_stop_signal(raw_inputs):
+                            self._kill_event.set()
 
                     #2. If STOP_SIGNAL, place it in output, place it back in receiver, and break loop
                     if self._has_stop_signal(raw_inputs):
-                        self._rq.put(raw_inputs, block = True)
                         raw_outputs = dict(raw_inputs)
                         raw_outputs[self._processor.id] = {
                             'message': STOP_SIGNAL,
@@ -379,6 +383,7 @@ class MultiprocessingOutputTask(MultiprocessingTask):
                     if not self.is_last:
                         if self._finish_count == 1:
                             self._task_queue.put(raw_outputs, block = True)
+                            break
                         elif self._finish_count == 0:
                             if self._flow_type == BATCH:
                                 self._task_queue.put(raw_outputs, block = True)
@@ -387,8 +392,9 @@ class MultiprocessingOutputTask(MultiprocessingTask):
                                     self._task_queue.put(raw_outputs, block = False)
                                 except:
                                     pass
-                    if self._finish_count == len(self._output_queues):
-                        break
+                    else:
+                        if self._finish_count == 1:
+                            break
                     
             except KeyboardInterrupt:
                 continue

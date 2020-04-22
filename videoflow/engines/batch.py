@@ -164,11 +164,13 @@ class BatchExecutionEngine(ExecutionEngine):
 
                     # Create processor tasks
                     mp_tasks_lock = Lock()
+                    kill_event = Event()
                     for idx in range(node.nb_tasks):
                         mp_task = MultiprocessingProcessorTask(
                             idx,
                             node,
                             mp_tasks_lock,
+                            kill_event,
                             receiveQueue,
                             accountingQueue,
                             output_queues[idx]
